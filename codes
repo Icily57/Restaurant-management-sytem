@@ -1,0 +1,353 @@
+// index.ts
+import { db } from './db';
+import { Address, Category, City, Comment, Driver, MenuItem, OrderMenuItem, OrderStatus, Orders, Restaurant, State, StatusCatalog, Users, RestaurantOwner } from './schema';
+
+async function main() {
+  // Insert a state
+  const [state] = await db.insertInto(State).values({
+    name: 'Muranga County',
+    code: 'MHG'
+  }).returningAll();
+
+  // Insert a city
+  const [city] = await db.insertInto(City).values({
+    name: 'Muranga Town',
+    state_id: state.id,
+  }).returningAll();
+
+  // Insert a user (restaurant owner)
+  const [user] = await db.insertInto(Users).values({
+    name: 'Margarita Henrietta',
+    contact_phone: '+254742068702',
+    phone_verified: true,
+    email: 'ritacto@nokras.com',
+    email_verified: true,
+    confirmation_code: 'CONF537',
+    password: '39047646',
+    created_at: new Date(),
+    updated_at: new Date(),
+  }).returningAll();
+
+  // Insert a restaurant
+  const [restaurant] = await db.insertInto(Restaurant).values({
+    name: 'Nokras Restaurant',
+    street_address: '357 MUkuyu Road',
+    zip_code: '35757',
+    city_id: city.id,
+    created_at: new Date(),
+    updated_at: new Date(),
+  }).returningAll();
+
+  // Associate the owner with the restaurant
+  await db.insertInto(RestaurantOwner).values({
+    restaurant_id: restaurant.id,
+    owner_id: user.id,
+  });
+
+  console.log('Data inserted successfully');
+}
+
+main().catch(console.error);
+
+
+// index.ts
+import { db, insertInitialData } from './db';
+import { Users } from './schema';
+
+async function main() {
+  await insertInitialData();
+
+  const users = await db.select().from(Users).execute();
+  console.log(users);
+}
+
+main().catch(console.error);
+
+
+// migrate.ts
+import { drizzle, runMigrations } from '@drizzle-orm/postgres';
+import { Address, Category, City, Comment, Driver, MenuItem, OrderMenuItem, OrderStatus, Orders, Restaurant, State, StatusCatalog, Users, RestaurantOwner } from './schema';
+
+const db = drizzle({
+  connectionString: process.env.DATABASE_URL!,
+});
+
+async function migrate() {
+  await runMigrations(db, {
+    tables: [Address, Category, City, Comment, Driver, MenuItem, OrderMenuItem, OrderStatus, Orders, Restaurant, State, StatusCatalog, Users, RestaurantOwner],
+  });
+  console.log('Migrations completed');
+}
+
+migrate().catch(console.error);
+
+
+import { Drizzle, PgDialect, defineTable, integer, text, boolean, decimal, timestamp, foreignKey } from 'drizzle-orm/pg-core';
+
+const drizzle = new Drizzle(new PgDialect({
+  connectionString: process.env.DATABASE_URL!,
+}));
+
+export const Address = defineTable({
+  id: integer().primaryKey(),
+  street_address_1: text(),
+  street_address_2: text(),
+  zip_code: text(),
+  delivery_instructions: text(),
+  user_id: integer().references(() => Users.id),
+  city_id: integer().references(() => City.id),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const Category = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+});
+
+export const City = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+  state_id: integer().references(() => State.id),
+});
+
+export const Comment = defineTable({
+  id: integer().primaryKey(),
+  order_id: integer().references(() => Orders.id),
+  user_id: integer().references(() => Users.id),
+  comment_text: text(),
+  is_complaint: boolean(),
+  is_praise: boolean(),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const Driver = defineTable({
+  id: integer().primaryKey(),
+  car_make: text(),
+  car_model: text(),
+  car_year: integer(),
+  user_id: integer().references(() => Users.id),
+  online: boolean(),
+  delivering: boolean(),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const MenuItem = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+  restaurant_id: integer().references(() => Restaurant.id),
+  category_id: integer().references(() => Category.id),
+  description: text(),
+  ingredients: text(),
+  price: decimal(),
+  active: boolean(),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const OrderMenuItem = defineTable({
+  id: integer().primaryKey(),
+  order_id: integer().references(() => Orders.id),
+  menu_item_id: integer().references(() => MenuItem.id),
+  quantity: integer(),
+  item_price: decimal(),
+  price: decimal(),
+  comment: text(),
+});
+
+export const OrderStatus = defineTable({
+  id: integer().primaryKey(),
+  order_id: integer().references(() => Orders.id),
+  status_catalog_id: integer().references(() => StatusCatalog.id),
+  created_at: timestamp(),
+});
+
+export const Orders = defineTable({
+  id: integer().primaryKey(),
+  restaurant_id: integer().references(() => Restaurant.id),
+  estimated_delivery_time: timestamp(),
+  actual_delivery_time: timestamp(),
+  delivery_address_id: integer().references(() => Address.id),
+  user_id: integer().references(() => Users.id),
+  driver_id: integer().references(() => Driver.id),
+  price: decimal(),
+  discount: decimal(),
+  final_price: decimal(),
+  comment: text(),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const Restaurant = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+  street_address: text(),
+  zip_code: text(),
+  city_id: integer().references(() => City.id),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const State = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+  code: text(),
+});
+
+export const StatusCatalog = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+});
+
+export const Users = defineTable({
+  id: integer().primaryKey(),
+  name: text(),
+  contact_phone: text(),
+  phone_verified: boolean(),
+  email: text(),
+  email_verified: boolean(),
+  confirmation_code: text(),
+  password: text(),
+  created_at: timestamp(),
+  updated_at: timestamp(),
+});
+
+export const RestaurantOwner = defineTable({
+  id: integer().primaryKey(),
+  restaurant_id: integer().references(() => Restaurant.id),
+  owner_id: integer().references(() => Users.id),
+});
+
+
+import { db, insertInitialData } from './db';
+import { Users } from './schema';
+import "dotenv/config";
+// import { drizzle } from "drizzle-orm/node-postgres";
+// import { Client } from "pg";
+// import * as schema from "./schema"
+
+async function main() {
+  await insertInitialData();
+
+  const users = await db.select().from(Users).execute();
+  console.log(users);
+}
+
+main().catch(console.error);
+
+
+// migrate.ts
+import { drizzle, runMigrations } from '@drizzle-orm/postgres';
+import { Address, Category, City, Comment, Driver, MenuItem, OrderMenuItem, OrderStatus, Orders, Restaurant, State, StatusCatalog, Users, RestaurantOwner } from './schema';
+
+const db = drizzle({
+  connectionString: process.env.DATABASE_URL!,
+});
+
+async function migrate() {
+  await runMigrations(db, {
+    tables: [Address, Category, City, Comment, Driver, MenuItem, OrderMenuItem, OrderStatus, Orders, Restaurant, State, StatusCatalog, Users, RestaurantOwner],
+  });
+  console.log('Migrations completed');
+}
+
+migrate().catch(console.error);
+
+
+import "dotenv/config";
+import { drizzle } from "drizzle-orm/node-postgres";
+PgDialect:"PostgreSQLDialect"
+import { Address, Category, City, Comment, Driver, MenuItem, OrderMenuItem, OrderStatus, Orders, Restaurant, State, StatusCatalog, Users, RestaurantOwner } from './schema';
+import { PgDialect } from "drizzle-orm/pg-core";
+import { NodePgClient } from "drizzle-orm/pg-core";
+import { State, City, Restaurant, Users, RestaurantOwner } from './schema';
+
+
+export const db = drizzle(new NodePgClient({
+    connectionString: process.env.DATABASE_URL as string,
+}));
+
+
+    const [city] = await db.insert(City).values({
+        name: 'Muranga Town',
+        state_id: State.id
+    })
+    .returning('*');
+
+    const [restaurant] = await db.insert(Restaurant).values({
+        name: 'Nokras Restaurant',
+        street_address: '357 Mukuyu Road',
+        zip_code: '53775',
+        city_id: city.id,
+        created_at: new Date(),
+        updated_at: new Date()
+    })
+    .returning('*');
+
+    const [user] = await db.insert(Users).values({
+        name: 'Margarita Henrietta',
+        contact_phone: '+254-742-068-702',
+        phone_verified: true,
+        email: 'rita.henri@example.com',
+        email_verified: true,
+        confirmation_code: 'CONF753',
+        password: '39047646@Hgm',  
+        created_at: new Date(),
+        updated_at: new Date()
+    })
+    .returning('*');
+
+    await db.insert(RestaurantOwner).values({
+        restaurant_id: restaurant.id,
+        owner_id: user.id
+    });
+
+    console.log('Initial data inserted');
+
+
+
+export async function insertInitialData() {
+  const [state] = await db.insert(State).values({
+    name: 'Muranga County',
+    code: 'MHG'
+  }).returning('*');
+
+
+  const [city] = await db.insert(City).values({
+    name: 'Muranga Town',
+    state_id: state.id
+  }).returning('*');
+
+  
+  const [restaurant] = await db.insert(Restaurant).values({
+    name: 'Nokras Restaurant',
+    street_address: '357 Mukuyu Road',
+    zip_code: '53775',
+    city_id: city.id,
+    created_at: new Date(),
+    updated_at: new Date()
+  }).returning('*');
+
+  
+  const [user] = await db.insert(Users).values({
+    name: 'Margarita Henrietta',
+    contact_phone: '+254-742-068-702',
+    phone_verified: true,
+    email: 'rita.henri@example.com',
+    email_verified: true,
+    confirmation_code: 'CONF753',
+    password: '39047646@Hgm',  
+    created_at: new Date(),
+    updated_at: new Date()
+  }).returning('*');
+
+
+  await db.insert(RestaurantOwner).values({
+    restaurant_id: restaurant.id,
+    owner_id: user.id
+  });
+
+  console.log('Initial data inserted');
+}
